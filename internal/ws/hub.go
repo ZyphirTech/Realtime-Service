@@ -8,38 +8,40 @@ import (
 
 type Hub struct {
 	mux     sync.Mutex
-	Clients map[*websocket.Conn]bool
+	Clients map[string]*websocket.Conn
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		Clients: make(map[*websocket.Conn]bool),
+		Clients: make(map[string]*websocket.Conn),
 	}
 }
 
-func (h *Hub) Add(conn *websocket.Conn) {
+func (h *Hub) Add(id string, conn *websocket.Conn) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	h.Clients[conn] = true
+	h.Clients[id] = conn
 }
 
-func (h *Hub) Remove(conn *websocket.Conn) {
+func (h *Hub) Remove(id string) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	delete(h.Clients, conn)
-	conn.Close()
+	if c, ok := h.Clients[id]; ok {
+		c.Close()
+		delete(h.Clients, id)
+	}
 }
 
-func (h *Hub) Boadcast(msg []byte) {
+func (h *Hub) SendTo(id string, msg []byte) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	for c := range h.Clients {
+	if c, ok := h.Clients[id]; ok {
 		err := c.WriteMessage(websocket.TextMessage, msg)
 		if err != nil {
-			delete(h.Clients, c)
+			delete(h.Clients, id)
 			c.Close()
 		}
 	}
